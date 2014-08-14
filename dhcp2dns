@@ -1,0 +1,201 @@
+#!/usr/bin/perl
+#
+# DHCP to DNS -- Create BIND ZONE files from a OpenBSD dhcpd.conf.
+#
+
+# Use all features of the current Perl version.
+use 5.16.3;
+
+# Help the programmer to produce good code.
+use strict;
+use warnings;
+
+################################################################################
+# PARAMETERS
+################################################################################
+
+my $DHCPD_CONF  = '/etc/dhcpd.conf';
+
+my $ADMIN_NAME      = 'admin';
+my $DNS_MASTER_NAME = 'oden';
+my $DOMAIN_NAME     = 'vinhejm.lan';
+my $IN_ADDRESS      = '10.10';
+
+my $ZONE_DB = "/var/named/master/db.$DOMAIN_NAME";
+my $REV_DB  = "/var/named/master/db.$IN_ADDRESS";
+
+my $TIME_TO_LIVE = 86400;  # live one day.
+my $REFRESH_TIME = 86400;  # refresh once a day.
+my $RETRY_TIME   = 7200;   # retry every second hour.
+my $EXPIRE_TIME  = 604800; # expire after one week.
+my $MINIMUM_TIME = 86400;  # minimum is one day.
+
+################################################################################
+# MAIN
+################################################################################
+
+# Test the configuration file before proceeding.
+exit if system("/usr/sbin/dhcpd -n -c $DHCPD_CONF");
+
+# Read the DHCP servers configuration file.
+open FILE, '<', $DHCPD_CONF or die $!;
+my @config = <FILE>;
+close FILE or die $!;
+
+# Create a hash table to store the hosts in.
+my %hosts;
+
+Parse_DHCPd_Config();
+
+# Backup the old zone files.
+system("cp $ZONE_DB $ZONE_DB.old");
+system("cp $REV_DB $REV_DB.old");
+
+# Write the zone database file.
+open FILE, '>', $ZONE_DB or die $!;
+print FILE Create_Zone_Database();
+close FILE or die $!;
+
+# Write the reverse database file.
+open FILE, '>', $REV_DB or die $!;
+print FILE Create_Reverse_Database();
+close FILE or die $!;
+
+# Reload BIND.
+system("/etc/rc.d/named reload");
+
+# Restart DHCPd
+system("/etc/rc.d/dhcpd restart");
+
+################################################################################
+# SUBROUTINES
+################################################################################
+
+#-------------------------------------------------------------------------------
+# Parse the DHCP daemon config
+#-------------------------------------------------------------------------------
+sub Parse_DHCPd_Config
+{
+    my $host_name;
+    
+    my $host_ip_address;
+
+    # Find and store all static DHCP records.
+    for my $line ( @config )
+    {
+        chomp $line;
+        
+        # If the line contains the string host,
+        # cut out the name.
+        if ( ( $line =~ s/^host\s+// ) && ( !$host_name ) )
+        {
+            $host_name = $line;
+        }
+
+        # If the line contains the string fixed-address,
+        # cut out the IP address and remove the trailing ;.
+        if ( ( $line =~ s/\s*fixed-address\s+// ) && ( $host_name ) )
+        {
+            ( $host_ip_address = $line ) =~ s/;//;
+        }
+
+        # If a name and address is achieved store them.
+        if ( $host_name && $host_ip_address )
+        {
+            $hosts{$host_name} = $host_ip_address;
+
+            $host_name = $host_ip_address = undef;
+        }
+    }
+}
+
+#-------------------------------------------------------------------------------
+# Create the Zone Database
+#-------------------------------------------------------------------------------
+sub Create_Zone_Database
+{
+    my $serial = Get_Serial_Number(); 
+
+    my $zone_output = qq^; Generated from $DHCPD_CONF by dhcp2dns.pl.
+\$ORIGIN .
+
+\$TTL $TIME_TO_LIVE
+
+$DOMAIN_NAME IN SOA $DNS_MASTER_NAME.$DOMAIN_NAME. $ADMIN_NAME.$DOMAIN_NAME. (
+    $serial
+    $REFRESH_TIME
+    $RETRY_TIME
+    $EXPIRE_TIME
+    $MINIMUM_TIME
+)
+
+$DOMAIN_NAME NS     $DNS_MASTER_NAME.$DOMAIN_NAME.
+
+\$ORIGIN $DOMAIN_NAME.
+
+$DNS_MASTER_NAME A $IN_ADDRESS.1.1
+^;
+
+    foreach my $name ( keys %hosts )
+    {
+        $zone_output .= "\n$name A $hosts{$name}\n";
+    }
+
+    return $zone_output;
+}
+
+#-------------------------------------------------------------------------------
+# Create the Reverse Zone Database
+#-------------------------------------------------------------------------------
+sub Create_Reverse_Database
+{
+    my $serial = Get_Serial_Number(); 
+
+    my $reverse_output = qq^; Generated from $DHCPD_CONF by dhcp2dns.pl.
+\$ORIGIN .
+
+\$TTL $TIME_TO_LIVE
+
+$IN_ADDRESS.in-addr.arpa IN SOA $DNS_MASTER_NAME.$DOMAIN_NAME. $ADMIN_NAME.$DOMAIN_NAME. (
+    $serial
+    $REFRESH_TIME
+    $RETRY_TIME
+    $EXPIRE_TIME
+    $MINIMUM_TIME
+)
+
+$IN_ADDRESS.in-addr.arpa NS     $DNS_MASTER_NAME.$DOMAIN_NAME.
+
+\$ORIGIN $IN_ADDRESS.in-addr.arpa.
+
+1.1 PTR $DNS_MASTER_NAME.$DOMAIN_NAME.
+^;
+
+    foreach my $name ( keys %hosts )
+    {
+        my @octets = split( /\./, $hosts{$name} );
+        $reverse_output .= "\n$octets[3].$octets[2] PTR $name.$DOMAIN_NAME.\n"; 
+    }
+
+    return $reverse_output;
+}
+
+#-------------------------------------------------------------------------------
+# Get a Serial Number (timestamp)
+#-------------------------------------------------------------------------------
+sub Get_Serial_Number
+{
+    my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime();
+
+    $mon  += 1;
+    $year += 1900;
+
+    $year = sprintf("%02u", $year % 100);
+    $mon  = sprintf("%02u", $mon);
+    $mday = sprintf("%02u", $mday);
+    $hour = sprintf("%02u", $hour);
+    $min  = sprintf("%02u", $min);
+    $sec  = sprintf("%02u", $sec );
+
+    return "${year}${yday}${hour}${min}";
+}
