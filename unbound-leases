@@ -1,0 +1,144 @@
+#!/usr/bin/env perl
+
+# Edited by jan, 2014-12-09.
+#
+
+#
+# unbound-leases: Create an include file for unbound with static DHCP leases.
+#
+
+use 5.18.2;
+use warnings;
+use autodie;
+
+################################################################################
+# PARAMETERS
+################################################################################
+
+my $DHCPD_CONF  = '/etc/dhcpd.conf';
+my $DOMAIN_NAME = 'vinhejm.lan';
+my $ZONE_FILE   = "/var/unbound/etc/vinhejm.lan";
+
+################################################################################
+# MAIN
+################################################################################
+
+# Test the configuration file before proceeding.
+exit if system("/usr/sbin/dhcpd", "-n", "-c", "$DHCPD_CONF");
+
+# Read the DHCP server's configuration file.
+open FILE, '<', $DHCPD_CONF or die $!;
+my @config = <FILE>;
+close FILE or die $!;
+
+# Create a hash table to store the hosts in.
+my %hosts;
+
+Parse_DHCPd_Config();
+
+# Backup the old zone file.
+system("mv", "$ZONE_FILE", "$ZONE_FILE.old");
+
+# Write the new zone file.
+open FILE, '>', "$ZONE_FILE" or die $!;
+print FILE Generate_Zone();
+close FILE or die $!;
+
+# Check the config
+if ( system("/usr/sbin/unbound-checkconf") )
+{
+    system("mv", "$ZONE_FILE", "$ZONE_FILE.new");
+    system("mv", "$ZONE_FILE.old", "$ZONE_FILE");
+    exit;
+}
+
+# Reload unbound(8).
+exit if system("/etc/rc.d/unbound", "reload");
+
+# Restart dhcpd(8).
+system("/etc/rc.d/dhcpd", "restart");
+
+################################################################################
+# SUBROUTINES
+################################################################################
+
+#-------------------------------------------------------------------------------
+# Parse the DHCP daemon config
+#-------------------------------------------------------------------------------
+sub Parse_DHCPd_Config
+{
+    my $host_name;
+    
+    my $host_ip_address;
+
+    # Find and store all static DHCP records.
+    for my $line ( @config )
+    {
+        chomp $line;
+        
+        # If the line contains the string host,
+        # cut out the name.
+        if ( ( $line =~ s/^host\s+// ) && ( !$host_name ) )
+        {
+            $host_name = $line;
+        }
+
+        # If the line contains the string fixed-address,
+        # cut out the IP address and remove the trailing ;.
+        if ( ( $line =~ s/\s*fixed-address\s+// ) && ( $host_name ) )
+        {
+            ( $host_ip_address = $line ) =~ s/;//;
+        }
+
+        # If a name and address is achieved store them.
+        if ( $host_name && $host_ip_address )
+        {
+            $hosts{$host_name} = $host_ip_address;
+
+            $host_name = $host_ip_address = undef;
+        }
+    }
+}
+
+#-------------------------------------------------------------------------------
+# Generate the local Zone
+#-------------------------------------------------------------------------------
+sub Generate_Zone
+{
+    my $timestamp = Get_Timestamp();
+
+    my $username = getlogin;
+
+    my $zone_output = qq^# Edited by $username, $timestamp.
+^;
+
+    foreach my $name ( sort keys %hosts )
+    {
+        $zone_output .= qq^
+local-data:     "$name.$DOMAIN_NAME. IN A $hosts{$name}"
+local-data-ptr: "$hosts{$name} $name.$DOMAIN_NAME"
+^;
+    }
+
+    return $zone_output;
+}
+
+#-------------------------------------------------------------------------------
+# Get a Timestamp
+#-------------------------------------------------------------------------------
+sub Get_Timestamp
+{
+    my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime();
+
+    $mon  += 1;
+    $year += 1900;
+
+    #$year = sprintf("%02u", $year % 100);
+    $mon  = sprintf("%02u", $mon);
+    $mday = sprintf("%02u", $mday);
+    $hour = sprintf("%02u", $hour);
+    $min  = sprintf("%02u", $min);
+    $sec  = sprintf("%02u", $sec );
+
+    return "${year}-${mon}-${mday} ${hour}:${min}:${sec}";
+}
