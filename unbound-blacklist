@@ -1,0 +1,129 @@
+#!/usr/bin/env perl
+
+#
+# unbound-blacklist: Create an include file for unbound with domains to block.
+#
+
+use 5.18.2;
+use warnings;
+use autodie;
+
+################################################################################
+# PARAMETERS
+################################################################################
+
+my $DOMAIN_LIST = '/var/adsuck/files/hosts.small';
+my $ZONE_FILE   = '/var/unbound/etc/blacklist';
+
+################################################################################
+# MAIN
+################################################################################
+
+# Read the domain list file.
+open FILE, '<', $DOMAIN_LIST or die $!;
+my @list = <FILE>;
+close FILE or die $!;
+
+# Create an array to store the domains in.
+my @domains;
+
+Parse_Domain_List();
+
+# Backup the old zone file.
+system("mv", "$ZONE_FILE", "$ZONE_FILE.old");
+
+# Write the new zone file.
+open FILE, '>', "$ZONE_FILE" or die $!;
+print FILE Generate_Zone();
+close FILE or die $!;
+
+## Check the config
+#if ( system("/usr/sbin/unbound-checkconf") )
+#{
+#    system("mv", "$ZONE_FILE", "$ZONE_FILE.new");
+#    system("mv", "$ZONE_FILE.old", "$ZONE_FILE");
+#    exit;
+#}
+#
+## Reload unbound(8).
+#exit if system("/etc/rc.d/unbound", "reload");
+
+################################################################################
+# SUBROUTINES
+################################################################################
+
+#-------------------------------------------------------------------------------
+# Parse the Domain List file
+#-------------------------------------------------------------------------------
+sub Parse_Domain_List
+{
+    my $domain_name;
+
+    # Find and store all domain names in the list.
+    for my $line ( @list )
+    {
+        chomp $line; # Chomp line feed
+
+        $line =~ s/\r//; # Chomp a possible carriage return
+        
+        # If the line contains the string 127.0.0.1,
+        # cut out the domain name.
+        if ( $line =~ s/^127\.0\.0\.1\s+// )
+        {
+            # Remove any possible comments on the line after the domain name.
+            ( $domain_name = $line ) =~ s/\s+#.*//;
+        }
+
+        # Store the domain name if it is non-empty and is not localhost.
+        if ( $domain_name && ( $domain_name ne 'localhost' ) )
+        {
+            push(@domains, $domain_name);
+        }
+
+        $domain_name = undef;
+    }
+}
+
+#-------------------------------------------------------------------------------
+# Generate the blacklist Zone
+#-------------------------------------------------------------------------------
+sub Generate_Zone
+{
+    my $timestamp = Get_Timestamp();
+
+    my $username = getlogin;
+
+    my $zone_output = qq^# Edited by $username, $timestamp.
+^;
+
+    my $domain_name;
+
+    while ( @domains )
+    {
+        $domain_name = shift(@domains);
+
+        $zone_output .= qq^local-zone: "$domain_name" static^;
+    }
+
+    return $zone_output;
+}
+
+#-------------------------------------------------------------------------------
+# Get a Timestamp
+#-------------------------------------------------------------------------------
+sub Get_Timestamp
+{
+    my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime();
+
+    $mon  += 1;
+    $year += 1900;
+
+    #$year = sprintf("%02u", $year % 100);
+    $mon  = sprintf("%02u", $mon);
+    $mday = sprintf("%02u", $mday);
+    $hour = sprintf("%02u", $hour);
+    $min  = sprintf("%02u", $min);
+    $sec  = sprintf("%02u", $sec );
+
+    return "${year}-${mon}-${mday} ${hour}:${min}:${sec}";
+}

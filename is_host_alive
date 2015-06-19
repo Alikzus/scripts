@@ -1,0 +1,15 @@
+#!/usr/bin/env perl
+
+# Edited by jan, 2015-04-30.
+
+use 5.18.2;
+use warnings;
+use autodie;
+
+my $address = shift @ARGV;
+
+my $result = `/sbin/ping -c 1 -q $address`;
+
+unless ($result =~ m/\s0\.0\%/) {
+    exec("/usr/local/sbin/pushover", "$address is not responding");
+}
