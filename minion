@@ -1,0 +1,190 @@
+#!/usr/bin/env perl
+
+# minion -- a quite simple web page generator
+#
+# Usage: cmark file.md | minion -s page.css -n nav.html > file.php
+# 
+# Credits to mc at the domain hack.org for his program mdn that this work is
+# derived from.
+#
+# Copyright (c) 2015, Joel A. Nilsson <joel@alikzus.se>
+# Copyright (c) 2014, Michael Cardell Widerkrantz <mc@hack.org>
+# 
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+# OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+# PERFORMANCE OF THIS SOFTWARE.
+
+################################################################################
+# PRAGMAS
+################################################################################
+
+use 5.20.1; # OpenBSD 5.7 base
+use strict;
+use warnings;
+use autodie;
+use Getopt::Std;
+use Text::CSV_XS;
+
+################################################################################
+# MAIN
+################################################################################
+
+# Use stylesheet (URL); set with -s.
+my $stylesheet;
+
+# Include navigation bar (URL); set with -n.
+my $navbar;
+
+my %options;
+
+getopts("n:s:", \%options);
+
+$stylesheet = $options{'s'} if $options{'s'};
+$navbar     = $options{'n'} if $options{'n'};
+
+my $csv = Text::CSV_XS->new ({ decode_utf8 => 0, sep_char => ';' });
+
+my $buffer;
+my $b_has_table;
+for my $line (<>) {
+    if ($line =~ m/<h1>/) {
+        $buffer .= title($line);
+    }
+    elsif ($line =~ m/<h\d>/) {
+        $buffer .= heading($line);
+    }
+    elsif ($line =~ m/matrix=/) {
+        $b_has_table = 1;
+        $buffer .= table($line);
+    }
+    else {
+        $buffer .= $line;
+    }
+}
+
+print beginning();
+print $buffer;
+print end();
+
+################################################################################
+# SUBROUTINES
+################################################################################
+
+sub beginning {
+    my $beginning = qq^<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="content-type" content="text/html; charset=utf-8">
+<meta name="viewport" content="initial-scale=1">
+<meta name="generator" content="minion by Joel A. Nilsson">
+^;
+
+    $beginning .= qq^<script src="sorttable.js"></script>\n^ if $b_has_table;
+
+    $beginning .= qq^<link rel="stylesheet" type="text/css" href="$stylesheet">\n^ if $stylesheet;
+
+    return $beginning;
+}
+
+#-------------------------------------------------------------------------------
+
+sub title {
+    my $line = $_[0];
+
+    my $headline = $line; 
+    $headline =~ s/<h1>//;
+    $headline =~ s/<\/h1>//;
+    chomp $headline;
+
+    my $title = qq^<title>$headline</title>\n</head>\n<body>\n^;
+
+    $title .= qq^<?php include("$navbar"); ?>\n^ if $navbar;
+
+    $title .= qq^<h1 id="Top">$headline</h1>\n^;
+
+    return $title;
+}
+
+#-------------------------------------------------------------------------------
+
+sub heading {
+    my $line = $_[0];
+
+    my $headline = $line; 
+    $headline =~ s/<h\d>//;
+    $headline =~ s/<\/h\d>//;
+    chomp $headline;
+
+    my $level;
+    given ($line) {
+        when (m/<h3>/) { $level = 3; }
+        when (m/<h4>/) { $level = 4; }
+        default        { $level = 2; } 
+    }
+
+    my $heading = qq^<h$level id="$headline">$headline</h$level>\n^;
+
+    return $heading;
+}
+#-------------------------------------------------------------------------------
+
+sub table {
+    my $line = $_[0];
+
+    my $csv_file = $line;
+    $csv_file =~ s/<p>matrix=//;
+    $csv_file =~ s/<\/p>//;
+    chomp $csv_file;
+
+    open my $csv_data, '<:encoding(utf8)', $csv_file or die "$csv_file: $!";
+
+    my $table = qq^<table class="sortable"><caption>$csv_file</caption>\n<thead>\n<tr>^;
+
+    my $is_head = 1;
+    while (my $row = $csv->getline ($csv_data)) {
+        my @cells = @$row;
+        
+        if ($is_head) {
+            $is_head = 0;
+
+            for my $element (@cells) {
+                $table .= qq^<th>$element</th>^;
+            }
+        
+            $table .= qq^</tr>\n</thead>\n<tbody>\n^;
+        }
+        else {
+            $table .= qq^<tr>^;
+    
+            for my $element (@cells) {
+                $table .= qq^<td>$element</td>^;
+            }
+    
+            $table .= qq^</tr>\n^;
+        }
+    }
+
+    $table .= qq^</tbody>\n</table>\n^;
+
+    close $csv_data or die "$csv_file: $!";
+
+    return $table;
+}
+
+#-------------------------------------------------------------------------------
+
+sub end {
+    return qq^</body>\n</html>\n^;
+}
+
+################################################################################
+# Last Changed: 2015-08-16 16:53:53 CEST
