@@ -1,9 +1,23 @@
 #!/bin/sh
+#
+# Copyright (c) 2014-2015, Joel A. Nilsson <joel@alikzus.se>
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+# OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+# PERFORMANCE OF THIS SOFTWARE.
+#
 
 tmux has-session -t default
 
-if [ $? != 0 ]
-then
+if [ $? != 0 ]; then
     # Create a new default session with a main window.
     tmux new-session -s default -n main -d
 
@@ -14,7 +28,7 @@ then
     tmux split-window -h -t default:1.1
     tmux split-window -h -t default:1.2
 
-    # Open syslogd messages in the top-left pane.
+    # Open syslog messages in the top-left pane.
     tmux send-keys -t default:1.1 '/usr/bin/tail -f /var/log/messages' C-m
 
     # Open newsbeuter in the bottom-right pane.
@@ -26,14 +40,25 @@ then
     # Open mutt in the bottom-right pane.
     tmux send-keys -t default:1.4 '/usr/local/bin/mutt' C-m
 
-    # Create a second window.
+    # Create a second window and split it in four equal panes.
     tmux new-window default
+    tmux split-window -v -t default
+    tmux split-window -h -t default:1.1
+    tmux split-window -h -t default:1.2
 
-    # Create a third window.
+    # Create three windows and split them vertically.
     tmux new-window default
+    tmux split-window -v -t default
+    tmux new-window default
+    tmux split-window -v -t default
+    tmux new-window default
+    tmux split-window -v -t default
 
     # Select the first window at start up.
     tmux select-window -t default:1
 fi
 
 tmux attach -t default
+
+#-------------------------------------------------------------------------------
+# Last updated: 2015-08-23 14:04:32 CEST
