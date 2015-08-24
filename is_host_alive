@@ -1,4 +1,4 @@
-#!/usr/bin/env perl
+#!/bin/sh
 #
 # Copyright (c) 2015, Joel A. Nilsson <joel@alikzus.se>
 #
@@ -15,17 +15,11 @@
 # PERFORMANCE OF THIS SOFTWARE.
 #
 
-use 5.18.2;
-use warnings;
-use autodie;
+/sbin/ping -c 1 -q $1 > /dev/null
 
-my $address = shift @ARGV;
-
-my $result = `/sbin/ping -c 1 -q $address`;
-
-unless ($result =~ m/\s0\.0\%/) {
-    exec("/usr/local/sbin/pushover", "$address is not responding");
-}
+if [ $? -gt 0 ]; then
+    /usr/local/bin/pushover $1 Offline
+fi
 
 ################################################################################
-# Last updated: 2015-08-23 14:07:56 CEST
+# Last updated: 2015-08-24 21:43:34 CEST
