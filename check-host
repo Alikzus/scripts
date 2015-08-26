@@ -1,5 +1,10 @@
 #!/bin/sh
 #
+# check-host -- check if one or several hosts are alive and use pushover to send
+#               a notification upon a negative response
+#
+# Usage: check-host [-f] filename/host
+#
 # Copyright (c) 2015, Joel A. Nilsson <joel@alikzus.se>
 #
 # Permission to use, copy, modify, and/or distribute this software for any
@@ -15,11 +20,61 @@
 # PERFORMANCE OF THIS SOFTWARE.
 #
 
-/sbin/ping -c 1 -q $1 > /dev/null
+abort() {
+	exit 1
+}
 
-if [ $? -gt 0 ]; then
-    /usr/local/bin/pushover $1 Offline
+usage() {
+	echo
+	echo "Usage: ${0##*/} [-f] filename/host" >&2
+	echo
+	echo "Options:"
+    echo "  -f    read host(s) from the specified file"
+	echo
+	abort
+}
+
+pr_err() {
+	echo "!!! ${@}"
+}
+
+pr() {
+	echo "==> ${@}"
+}
+
+check() {
+    /sbin/ping -c 1 -q $1 > /dev/null
+
+    if [ $? -gt 0 ]; then
+        # Pushover format: title message
+        /usr/local/bin/pushover ${_HOST} "$1 is offline"
+    fi
+}
+
+trap "abort" 1 2 3 13 15
+
+_HOST=`/bin/hostname -s`
+
+while getopts 'f' arg; do
+	case ${arg} in
+	f)	plural=1 ;;
+	*)	usage ;;
+	esac
+done
+
+# TODO Check options and arguments further
+#[ $# = $(($OPTIND-1)) ] || usage
+
+if [ "${plural}" -eq 1 ]; then
+    hosts=`cat $2`
+    
+    for host in ${hosts}; do
+        check ${host}
+    done
+else
+    check $1
 fi
 
 ################################################################################
-# Last updated: 2015-08-24 21:43:34 CEST
+# Last updated: 2015-08-26 18:15:37 CEST
+
