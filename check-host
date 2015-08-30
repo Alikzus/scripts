@@ -43,11 +43,11 @@ pr() {
 }
 
 check() {
-    /sbin/ping -c 1 -q $1 > /dev/null
+    /sbin/ping -c 3 -q $1 > /dev/null
 
     if [ $? -gt 0 ]; then
         # Pushover format: title message
-        /usr/local/bin/pushover ${_HOST} "$1 is offline"
+        /usr/local/bin/pushover ${_HOST} "$1 is not responding to ping"
     fi
 }
 
@@ -76,5 +76,5 @@ else
 fi
 
 ################################################################################
-# Last updated: 2015-08-26 18:15:37 CEST
+# Last updated: 2015-08-30 19:19:41 CEST
 
