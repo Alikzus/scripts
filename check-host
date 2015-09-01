@@ -42,18 +42,38 @@ pr() {
 	echo "==> ${@}"
 }
 
+send_msg() {
+    # Pushover format: title message
+    /usr/local/bin/pushover ${_HOST} "$1"
+}
+
 check() {
+    cache="${_TMPDIR}/$1"
+
     /sbin/ping -c 3 -q $1 > /dev/null
 
     if [ $? -gt 0 ]; then
-        # Pushover format: title message
-        /usr/local/bin/pushover ${_HOST} "$1 is not responding to ping"
+        if [ -f ${cache} ]; then
+            if [ `/usr/bin/find ${cache} -mmin +60` ]; then
+                touch ${cache}
+                send_msg "$1 is still NOT responding to pings"
+            fi
+        else
+            touch ${cache}
+            send_msg "$1 is NOT responding to pings"
+        fi
+    else
+        if [ -f ${cache} ]; then
+            rm ${cache}
+            send_msg "$1 has started to respond to pings again"
+        fi
     fi
 }
 
 trap "abort" 1 2 3 13 15
 
 _HOST=`/bin/hostname -s`
+_TMPDIR="/tmp/check-host"
 
 while getopts 'f' arg; do
 	case ${arg} in
@@ -63,7 +83,10 @@ while getopts 'f' arg; do
 done
 
 # TODO Check options and arguments further
-#[ $# = $(($OPTIND-1)) ] || usage
+
+if [ ! -d ${_TMPDIR} ]; then
+    /bin/mkdir ${_TMPDIR}
+fi
 
 if [ "${plural}" -eq 1 ]; then
     hosts=`cat $2`
@@ -76,5 +99,5 @@ else
 fi
 
 ################################################################################
-# Last updated: 2015-08-30 19:19:41 CEST
+# Last updated: 2015-09-01 18:51:54 CEST
 
