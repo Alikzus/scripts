@@ -27,9 +27,14 @@
 ################################################################################
 
 use 5.20.1;    # OpenBSD 5.7 base
+
 use strict;
 use warnings;
+
+no warnings 'experimental::smartmatch';
+
 use autodie;
+use English '-no_match_vars';
 use Getopt::Std;
 use Text::CSV_XS;
 
@@ -47,27 +52,32 @@ my %options;
 
 getopts( "n:s:", \%options );
 
-$stylesheet = $options{'s'} if $options{'s'};
-$navbar     = $options{'n'} if $options{'n'};
+if ( $options{'s'} ) {
+    $stylesheet = $options{'s'};
+}
 
-my $csv = Text::CSV_XS->new( { decode_utf8 => 0, sep_char => ';' } );
+if ( $options{'n'} ) {
+    $navbar = $options{'n'};
+}
+
+my $csv = Text::CSV_XS->new(
+    {   decode_utf8 => 0,
+        sep_char    => ';',
+    }
+);
 
 my $buffer;
 my $b_has_table;
-for my $line (<>) {
-    if ( $line =~ m/<h1>/ ) {
-        $buffer .= title($line);
-    }
-    elsif ( $line =~ m/<h\d>/ ) {
-        $buffer .= heading($line);
-    }
-    elsif ( $line =~ m/matrix=/ ) {
-        $b_has_table = 1;
-        $buffer .= table($line);
-    }
-    else {
-        $buffer .= $line;
-    }
+
+while ( my $line = <> ) {
+    $buffer .= do {
+        given ($line) {
+            when ( m/<h1>/    ) { title($line)   }
+            when ( m/<h\d>/   ) { heading($line) }
+            when ( m/matrix=/ ) { table($line)   }
+            default             { $line          }
+        }
+    };
 }
 
 print beginning();
@@ -79,6 +89,8 @@ print end();
 ################################################################################
 
 sub beginning {
+
+    # TODO Replace with heredoc.
     my $beginning = qq^<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -88,11 +100,14 @@ sub beginning {
 <meta name="generator" content="minion by Joel A. Nilsson">
 ^;
 
-    $beginning .= qq^<script src="sorttable.js"></script>\n^ if $b_has_table;
+    if ($b_has_table) {
+        $beginning .= qq{<script src="sorttable.js"></script>\n};
+    }
 
-    $beginning
-        .= qq^<link rel="stylesheet" type="text/css" href="$stylesheet">\n^
-        if $stylesheet;
+    if ($stylesheet) {
+        $beginning
+            .= qq{<link rel="stylesheet" type="text/css" href="$stylesheet">\n};
+    }
 
     return $beginning;
 }
@@ -100,18 +115,22 @@ sub beginning {
 #-------------------------------------------------------------------------------
 
 sub title {
-    my $line = $_[0];
+    my $line = @_;
 
     my $headline = $line;
-    $headline =~ s/<h1>//;
-    $headline =~ s/<\/h1>//;
+
+    $headline =~ s/ <h1>   / /xms;
+    $headline =~ s/ <\/h1> / /xms;
+
     chomp $headline;
 
-    my $title = qq^<title>$headline</title>\n</head>\n<body>\n^;
+    my $title = "<title>$headline</title>\n</head>\n<body>\n";
 
-    $title .= qq^<?php include("$navbar"); ?>\n^ if $navbar;
+    if ($navbar) {
+        $title .= qq{<?php include("$navbar"); ?>\n};
+    }
 
-    $title .= qq^<h1 id="Top">$headline</h1>\n^;
+    $title .= qq{<h1 id="Top">$headline</h1>\n};
 
     return $title;
 }
@@ -119,21 +138,25 @@ sub title {
 #-------------------------------------------------------------------------------
 
 sub heading {
-    my $line = $_[0];
+    my $line = @_;
 
     my $headline = $line;
-    $headline =~ s/<h\d>//;
-    $headline =~ s/<\/h\d>//;
+
+    $headline =~ s/ <h\d>   / /xms;
+    $headline =~ s/ <\/h\d> / /xms;
+
     chomp $headline;
 
-    my $level;
-    given ($line) {
-        when (m/<h3>/) { $level = 3; }
-        when (m/<h4>/) { $level = 4; }
-        default        { $level = 2; }
-    }
+    # TODO Replace with hash look-up.
+    my $level = do {
+        given ($line) {
+            when ( m/<h3>/ ) { '3' }
+            when ( m/<h4>/ ) { '4' }
+            default          { '2' }
+        }
+    };
 
-    my $heading = qq^<h$level id="$headline">$headline</h$level>\n^;
+    my $heading = qq{<h$level id="$headline">$headline</h$level>\n};
 
     return $heading;
 }
@@ -141,19 +164,24 @@ sub heading {
 #-------------------------------------------------------------------------------
 
 sub table {
-    my $line = $_[0];
+    my $line = @_;
+
+    $b_has_table = 1;
 
     my $csv_file = $line;
-    $csv_file =~ s/<p>matrix=//;
-    $csv_file =~ s/<\/p>//;
+
+    $csv_file =~ s/ <p>matrix= / /xms;
+    $csv_file =~ s/ <\/p>      / /xms;
+
     chomp $csv_file;
 
     open my $csv_data, '<:encoding(utf8)', $csv_file or die "$csv_file: $!";
 
     my $table
-        = qq^<table class="sortable"><caption>$csv_file</caption>\n<thead>\n<tr>^;
+        = qq{<table class="sortable"><caption>$csv_file</caption>\n<thead>\n<tr>};
 
     my $is_head = 1;
+
     while ( my $row = $csv->getline($csv_data) ) {
         my @cells = @$row;
 
@@ -161,23 +189,23 @@ sub table {
             $is_head = 0;
 
             for my $element (@cells) {
-                $table .= qq^<th>$element</th>^;
+                $table .= "<th>$element</th>";
             }
 
-            $table .= qq^</tr>\n</thead>\n<tbody>\n^;
+            $table .= "</tr>\n</thead>\n<tbody>\n";
         }
         else {
-            $table .= qq^<tr>^;
+            $table .= "<tr>";
 
             for my $element (@cells) {
-                $table .= qq^<td>$element</td>^;
+                $table .= "<td>$element</td>";
             }
 
-            $table .= qq^</tr>\n^;
+            $table .= "</tr>\n";
         }
     }
 
-    $table .= qq^</tbody>\n</table>\n^;
+    $table .= "</tbody>\n</table>\n";
 
     close $csv_data or die "$csv_file: $!";
 
@@ -187,8 +215,10 @@ sub table {
 #-------------------------------------------------------------------------------
 
 sub end {
-    return qq^</body>\n</html>\n^;
+    return "</body>\n</html>\n";
 }
 
+__END__
+
 ################################################################################
-# Last Changed: 2015-09-13 12:57:19 CEST
+# Last Changed: 2015-09-13 13:47:40 CEST
