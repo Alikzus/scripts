@@ -1,0 +1,99 @@
+#!/bin/sh
+#
+# artisan -- convert artwork.tif to Folder.jpg and distribute it
+#
+# Usage: artisan [-u] directory
+#
+# Copyright (c) 2015, Joel A. Nilsson <joel@alikzus.se>
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+# OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+# PERFORMANCE OF THIS SOFTWARE.
+#
+
+MAX_THREADS="4" # preferably the number of CPU cores
+
+abort() {
+	exit 1
+}
+
+echo() {
+    if [ "$#" -gt 0 ]; then
+         printf %s "$1"
+         shift
+    fi
+    if [ "$#" -gt 0 ]; then
+         printf ' %s' "$@"
+    fi
+    printf '\n'
+}
+
+usage() {
+	echo
+	echo "Usage: ${0##*/} [-u] directory" >&2
+	echo
+	echo "Options:"
+    echo "  -u    update; do not skip existing files."
+	echo
+	abort
+}
+
+pr_err() {
+	echo "!!! ${@}"
+}
+
+pr() {
+	echo "==> ${@}"
+}
+
+trap "abort" 1 2 3 13 15
+
+while getopts 'u' arg; do
+	case ${arg} in
+	u)	update=1 ;;
+	*)	usage ;;
+	esac
+done
+
+# TODO There is a better way to do this
+if [ "${update}" ]; then
+    TOP_DIR="$2"
+else
+    TOP_DIR="$1"
+fi
+
+formats=`find ${TOP_DIR}/* -maxdepth 0 ! -name old -exec basename {} \;`
+targets=`find ${TOP_DIR}/flac/ -name artwork.tif`
+
+for format in ${formats}; do
+    if [ "${format}" == "aac" ]; then
+        extra_opts="-sampling-factor 4:2:0 -define jpeg:dct-method=float -resize 55% -quality 25%"
+    else
+        extra_opts=""
+    fi
+
+    for target in ${targets}; do
+        target_dir=`dirname ${target} | sed -E "s/\/flac\//\/${format}\//"`
+
+        # TODO Add support for the update option
+        if [ ! -f "${target_dir}/Folder.jpg" ]; then
+            pr "${target} -strip ${extra_opts} ${target_dir}/Folder.jpg"
+            /usr/local/bin/convert ${target} -strip ${extra_opts} ${target_dir}/Folder.jpg &
+        fi
+
+        while [ $(jobs | wc -l) -ge "${MAX_THREADS}" ]; do
+            sleep 0.1
+        done
+    done
+done
+
+################################################################################
+# Last updated: 2015-09-06 15:43:12 CEST
