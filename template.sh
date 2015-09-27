@@ -15,7 +15,7 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #
 
-bye_bye() {
+abort() {
 	exit 1
 }
 
@@ -26,7 +26,7 @@ usage() {
 	echo "Options:"
     echo "  -f    read host(s) from the specified file"
 	echo
-	bye_bye
+	abort
 }
 
 pr_err() {
@@ -37,18 +37,18 @@ pr() {
 	echo "==> ${@}"
 }
 
-trap "bye_bye" 1 2 3 13 15
+trap "abort" 1 2 3 13 15
 
 if [ "$(id -u)" -ne 0 ]; then
 	pr_err "Need root privileges to run"
 	usage
 fi
 
-while getopts 'KSc' arg; do
+while getopts 'abc' arg; do
 	case ${arg} in
-	K)	nokrn=1 ;;
-	S)	nosig=1; pkgopt="${pkgopt} -Dnosig -Dunsigned" ;;
-	c)	checkrun=1 ;;
+	a)	;;
+	b)	;;
+	c)	;;
 	*)	usage ;;
 	esac
 done
