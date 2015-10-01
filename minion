@@ -170,8 +170,8 @@ sub table {
 
     my $csv_file = $line;
 
-    $csv_file =~ s/ <p>matrix= / /xms;
-    $csv_file =~ s/ <\/p>      / /xms;
+    $csv_file =~ s/<p>matrix= //xms;
+    $csv_file =~ s/<\/p>      //xms;
 
     chomp $csv_file;
 
@@ -221,4 +221,4 @@ sub end {
 __END__
 
 ################################################################################
-# Last Changed: 2015-09-14 19:35:53 CEST
+# Last Changed: 2015-10-01 19:42:43 CEST
