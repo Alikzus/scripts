@@ -17,7 +17,7 @@
 # PERFORMANCE OF THIS SOFTWARE.
 #
 
-use 5.18.2;
+use 5.20.2; # OpenBSD 5.8
 use warnings;
 use autodie;
 
@@ -26,8 +26,8 @@ use autodie;
 ################################################################################
 
 my $DHCPD_CONF  = '/etc/dhcpd.conf';
-my $DOMAIN_NAME = 'vinhejm.lan';
-my $ZONE_FILE   = "/var/unbound/etc/vinhejm.lan";
+my $DOMAIN_NAME = 'internal.vinhejm.se';
+my $ZONE_FILE   = "/var/unbound/etc/internal.vinhejm.se";
 
 ################################################################################
 # MAIN
@@ -154,4 +154,4 @@ sub Get_Timestamp
 }
 
 ################################################################################
-# Last updated: 2015-08-23 14:10:30 CEST
+# Last updated: 2015-12-27 21:12:25 CET
