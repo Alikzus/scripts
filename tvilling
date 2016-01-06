@@ -1,0 +1,156 @@
+#!/bin/sh
+#
+# tvilling -- yet another Duplicity wrapper
+#
+# Usage: TBD
+#
+# Copyright (c) 2015-2016, Joel A. Nilsson <joel@alikzus.se>
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+
+name="$1"
+command="$2"
+
+#-------------------------------------------------------------------------------
+
+ARCHIVE_DIRECTORY="/var/duplicity"
+TEMPORARY_DIRECTORY="/tmp/duplicity" # tmpfs
+
+#-------------------------------------------------------------------------------
+
+abort() {
+    #umount ${TEMPORARY_DIRECTORY}
+
+    echo "!!! Aborted"
+	exit 1
+}
+
+error() {
+	echo "!!! ${@}"
+}
+
+message() {
+	echo "==> ${@}"
+}
+
+usage() {
+	echo
+	echo "Usage: ${0##*/} name command" >&2
+    echo
+    echo "  name     backup name"
+    echo "  command  make/purge/status"  
+	echo
+	exit 1
+}
+
+#-------------------------------------------------------------------------------
+
+dump_database() {
+    # TODO Variable
+    cd /var/postgresql
+    /usr/bin/sudo -u _postgresql /usr/local/bin/pg_dumpall > /home/.postgresql/duplicity.sqldump || error "Problem with the database dumping"
+}
+
+copy_www() {
+    # TODO Variable
+    /usr/local/bin/rsync -qa --delete /var/www/* /home/.www || error "Problem with the WWW archiving"
+}
+
+#-------------------------------------------------------------------------------
+
+make_backup() {
+    message "Making a backup"
+
+    #action="--dry-run"
+    action=""
+
+    dump_database
+    copy_www
+
+    if [ ! -d "${TEMPORARY_DIRECTORY}" ]; then
+        mkdir ${TEMPORARY_DIRECTORY}
+    fi
+    mount -t tmpfs -o -s4G -o -uroot -o -gwheel -o -m0600 tmpfs ${TEMPORARY_DIRECTORY}
+
+    GPG_options="--compress-algo=none -z 0 --cipher-algo=aes256 --digest-algo=sha512"
+    exclude_list="${ARCHIVE_DIRECTORY}/${name}/exclude.lst"
+
+    # TODO Source configuration file instead of this:
+    source_directory="`cat ${ARCHIVE_DIRECTORY}/${name}/src_dir`"
+
+    duplicity $action \
+        --archive-dir ${ARCHIVE_DIRECTORY} \
+        --encrypt-key ${GPG_encrypt_key} \
+        --name ${name} \
+        --exclude-filelist ${exclude_list} \
+        --num-retries 3 \
+        --asynchronous-upload \
+        --volsize 1000 \
+        --gpg-options "${GPG_options}" \
+        --tempdir ${TEMPORARY_DIRECTORY} \
+        ${source_directory} ${target_URL} || \
+        error "Problem with Duplicity"
+
+    umount ${TEMPORARY_DIRECTORY}
+}
+
+purge_backup() {
+    message "Purging the backup chain"
+
+    #action="remove-all-but-n-full 1 --force"
+    #action="remove-all-inc-of-but-n-full 1 --force"
+}
+
+check_backup() {
+    message "Checking the backup archive"
+
+    #action="status"
+}
+
+#-------------------------------------------------------------------------------
+
+trap "abort" 1 2 3 13 15
+
+if [ "$(id -u)" -ne 0 ]; then
+	error "Need root privileges to run"
+	usage
+fi
+
+if [ "$#" -ne 2 ]; then
+    error "Wrong number of arguments"
+    usage
+fi
+
+if [ ! -d "${ARCHIVE_DIRECTORY}/${name}" ]; then
+    error "Missing configuration for ${name}"
+    usage
+fi
+
+# TODO Source configuration file instead of this:
+GPG_encrypt_key="`cat ${ARCHIVE_DIRECTORY}/${name}/enc_key`"
+PASSPHRASE="`cat ${ARCHIVE_DIRECTORY}/${name}/pp`"
+target_URL="`cat ${ARCHIVE_DIRECTORY}/${name}/trgt_url`"
+
+if [ "${command}" == "make" ]; then
+    make_backup
+elif [ "${command}" == "purge" ]; then
+    purge_backup
+elif [ "${command}" == "check" ]; then
+    check_backup
+else
+    error "Invalid command"
+    usage
+fi
+
+exit 0
