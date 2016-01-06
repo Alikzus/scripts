@@ -19,21 +19,10 @@
 # PERFORMANCE OF THIS SOFTWARE.
 #
 
-MAX_THREADS="2" # preferably the number of CPU cores
+MAX_THREADS="2" # preferably the number of real CPU cores
 
 abort() {
 	exit 1
-}
-
-echo() {
-    if [ "$#" -gt 0 ]; then
-         printf %s "$1"
-         shift
-    fi
-    if [ "$#" -gt 0 ]; then
-         printf ' %s' "$@"
-    fi
-    printf '\n'
 }
 
 pr_err() {
@@ -58,13 +47,14 @@ for target in ${targets}; do
     artist=`basename ${artist_path}`
     destination="${WWW_DIR}/${artist}/${album}"
 
-    pr "${destination}"
-
     if [ ! -d ${destination} ]; then
         mkdir -p ${destination}
     fi
 
-    cp ${target} ${destination}/Folder.jpg
+    if [ ! -f ${destination}/Folder.jpg ]; then
+        cp ${target} ${destination}/Folder.jpg
+        pr "${destination}"
+    fi
 
 #    while [ $(jobs | wc -l) -ge "${MAX_THREADS}" ]; do
 #        sleep 0.1
@@ -72,4 +62,4 @@ for target in ${targets}; do
 done
 
 ################################################################################
-# Last updated: 2015-09-06 17:02:41 CEST
+# Last updated: 2016-01-06 17:55:33 CET

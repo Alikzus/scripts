@@ -50,7 +50,7 @@ send_msg() {
 check() {
     cache="${_TMPDIR}/$1"
 
-    /sbin/ping -c 3 -q $1 > /dev/null
+    /sbin/ping -c 5 -q $1 > /dev/null
 
     if [ $? -gt 0 ]; then
         if [ -f ${cache} ]; then
@@ -99,5 +99,5 @@ else
 fi
 
 ################################################################################
-# Last updated: 2015-09-06 15:45:26 CEST
+# Last updated: 2015-10-11 10:43:24 CEST
 
