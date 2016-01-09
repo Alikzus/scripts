@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# mount_img -- temporarily mount an image/ISO file to /mnt
+# mount_img -- temporarily mount an image/ISO file to /cdrom
 #
 # Usage: mount_img image_file
 #
@@ -51,4 +51,4 @@ if [ -z $1 ]; then
 fi
 
 /sbin/vnconfig vnd0 $1
-/sbin/mount -t cd9660 /dev/vnd0c /mnt
+/sbin/mount -t cd9660 /dev/vnd0c /cdrom
