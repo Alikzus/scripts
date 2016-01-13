@@ -5,7 +5,7 @@
 #
 # Usage: check-host [-f] filename/host
 #
-# Copyright (c) 2015, Joel A. Nilsson <joel@alikzus.se>
+# Copyright (c) 2015-2016, Joel A. Nilsson <joel@alikzus.se>
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -118,5 +118,5 @@ else
 fi
 
 ################################################################################
-# Last updated: 2016-01-13 19:18:38 CET
+# Last updated: 2016-01-13 19:37:10 CET
 
