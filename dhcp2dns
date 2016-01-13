@@ -2,7 +2,10 @@
 #
 # DHCP to DNS -- Create BIND ZONE files from a OpenBSD dhcpd.conf.
 #
-# Copyright (c) Year(s), Company or Person's Name <E-mail address>
+# ABANDONED!!! This script was replaced with unbound-leases when OpenBSD
+#              switched from BIND to Unbound and NDS in base.
+#
+# Copyright (c) 2013-2016, Joel A. Nilsson <joel@alikzus.se>
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -215,4 +218,4 @@ sub Get_Serial_Number
 }
 
 ################################################################################
-# Last updated: 2015-08-23 14:06:03 CEST
+# Last updated: 2016-01-13 19:31:08 CET
