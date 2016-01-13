@@ -20,7 +20,23 @@
 # PERFORMANCE OF THIS SOFTWARE.
 #
 
+CONTROL="www.google.se"
+
+pr_err() {
+	echo "!!! ${@}"
+}
+
+pr() {
+	echo "==> ${@}"
+}
+
+error() {
+    pr_err $1
+    abort
+}
+
 abort() {
+    echo "Aborted"
 	exit 1
 }
 
@@ -31,15 +47,7 @@ usage() {
 	echo "Options:"
     echo "  -f    read host(s) from the specified file"
 	echo
-	abort
-}
-
-pr_err() {
-	echo "!!! ${@}"
-}
-
-pr() {
-	echo "==> ${@}"
+	exit 1
 }
 
 send_msg() {
@@ -47,26 +55,37 @@ send_msg() {
     /usr/local/bin/pushover ${_HOST} "$1"
 }
 
-check() {
+no_respons() {
+    if [ -f ${cache} ]; then
+        if [ `/usr/bin/find ${cache} -mmin +60` ]; then
+            touch ${cache}
+            send_msg "$1 is still NOT responding to pings"
+        fi
+    else
+        touch ${cache}
+        send_msg "$1 is NOT responding to pings"
+    fi
+}
+
+respons() {
+    if [ -f ${cache} ]; then
+        rm ${cache}
+        send_msg "$1 has started to respond to pings again"
+    fi
+}
+
+check_respons() {
     cache="${_TMPDIR}/$1"
 
     /sbin/ping -c 5 -q $1 > /dev/null
 
     if [ $? -gt 0 ]; then
-        if [ -f ${cache} ]; then
-            if [ `/usr/bin/find ${cache} -mmin +60` ]; then
-                touch ${cache}
-                send_msg "$1 is still NOT responding to pings"
-            fi
-        else
-            touch ${cache}
-            send_msg "$1 is NOT responding to pings"
+        /sbin/ping -c 2 -q ${CONTROL} > /dev/null
+        if [ $? -eq 0 ]; then
+            no_respons
         fi
     else
-        if [ -f ${cache} ]; then
-            rm ${cache}
-            send_msg "$1 has started to respond to pings again"
-        fi
+        respons
     fi
 }
 
@@ -92,12 +111,12 @@ if [ "${plural}" -eq 1 ]; then
     hosts=`cat $2`
     
     for host in ${hosts}; do
-        check ${host}
+        check_respons ${host}
     done
 else
-    check $1
+    check_respons $1
 fi
 
 ################################################################################
-# Last updated: 2015-10-11 10:43:24 CEST
+# Last updated: 2016-01-13 19:18:38 CET
 
