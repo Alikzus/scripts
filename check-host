@@ -82,10 +82,10 @@ check_respons() {
     if [ $? -gt 0 ]; then
         /sbin/ping -c 2 -q ${CONTROL} > /dev/null
         if [ $? -eq 0 ]; then
-            no_respons
+            no_respons $1
         fi
     else
-        respons
+        respons $1
     fi
 }
 
@@ -118,5 +118,5 @@ else
 fi
 
 ################################################################################
-# Last updated: 2016-01-13 19:37:10 CET
+# Last updated: 2016-01-16 10:22:14 CET
 
