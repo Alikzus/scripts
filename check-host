@@ -20,56 +20,68 @@
 # PERFORMANCE OF THIS SOFTWARE.
 #
 
+################################################################################
+# PRAGMAS
+################################################################################
+
+set -eu
+
+################################################################################
+# CONSTANTS
+################################################################################
+
 CONTROL="www.google.se"
+NAME="${0##*/}"
 
-pr_err() {
-	echo "!!! ${@}"
-}
-
-pr() {
-	echo "==> ${@}"
-}
+################################################################################
+# SUBROUTINES
+################################################################################
 
 error() {
-    pr_err $1
-    abort
+    echo "!!! ${*}"
+}
+
+say() {
+    echo "==> ${*}"
 }
 
 abort() {
-    echo "Aborted"
-	exit 1
+    say "Aborted"
+    exit 1
 }
 
 usage() {
-	echo
-	echo "Usage: ${0##*/} [-f] filename/host" >&2
-	echo
-	echo "Options:"
+    echo
+    echo "Usage: ${NAME} [-f] filename/host" >&2
+    echo
+    echo "Options:"
     echo "  -f    read host(s) from the specified file"
-	echo
-	exit 1
+    echo
+    exit 1
 }
+
+#===============================================================================
 
 send_msg() {
     # Pushover format: title message
-    /usr/local/bin/pushover ${_HOST} "$1"
+    /usr/local/bin/pushover "${_HOST}" "$1"
 }
 
 no_respons() {
-    if [ -f ${cache} ]; then
-        if [ `/usr/bin/find ${cache} -mmin +60` ]; then
-            touch ${cache}
+    if [ -f "${cache}" ]; then
+        if [ "$(/usr/bin/find "${cache}" -mmin +60)" ]; then
+            touch "${cache}"
             send_msg "$1 is still NOT responding to pings"
         fi
     else
-        touch ${cache}
+        touch "${cache}"
         send_msg "$1 is NOT responding to pings"
     fi
 }
 
 respons() {
-    if [ -f ${cache} ]; then
-        rm ${cache}
+    if [ -f "${cache}" ]; then
+        rm "${cache}"
         send_msg "$1 has started to respond to pings again"
     fi
 }
@@ -77,46 +89,61 @@ respons() {
 check_respons() {
     cache="${_TMPDIR}/$1"
 
-    /sbin/ping -c 5 -q $1 > /dev/null
+    trials=0
 
-    if [ $? -gt 0 ]; then
-        /sbin/ping -c 2 -q ${CONTROL} > /dev/null
+    while [ ${trials} -lt 60 ]; do
+        /sbin/ping -c 1 -q "$1" > /dev/null
         if [ $? -eq 0 ]; then
-            no_respons $1
+            got_respons=1
+            break
+        else
+            got_respons=0
+        fi
+        trials=$(("${trials}" + 1))
+        sleep 1
+    done
+
+    if [ "${got_respons}" -eq 0 ]; then
+        /sbin/ping -c 3 -q "${CONTROL}" > /dev/null
+        if [ $? -eq 0 ]; then
+            no_respons "$1"
         fi
     else
-        respons $1
+        respons "$1"
     fi
 }
 
+################################################################################
+# MAIN
+################################################################################
+
 trap "abort" 1 2 3 13 15
 
-_HOST=`/bin/hostname -s`
-_TMPDIR="/tmp/check-host"
+_HOST=$(/bin/hostname -s)
+_TMPDIR="/tmp/${NAME}"
+
+file_is_specified=0
 
 while getopts 'f' arg; do
-	case ${arg} in
-	f)	plural=1 ;;
-	*)	usage ;;
-	esac
+    case ${arg} in
+    f)  file_is_specified=1 ;;
+    *)  usage ;;
+    esac
 done
 
-# TODO Check options and arguments further
-
-if [ ! -d ${_TMPDIR} ]; then
-    /bin/mkdir ${_TMPDIR}
+if [ ! -d "${_TMPDIR}" ]; then
+    /bin/mkdir "${_TMPDIR}"
 fi
 
-if [ "${plural}" -eq 1 ]; then
-    hosts=`cat $2`
+if [ "${file_is_specified}" -eq 1 ]; then
+    hosts=$(cat "$2")
     
     for host in ${hosts}; do
-        check_respons ${host}
+        check_respons "${host}"
     done
 else
-    check_respons $1
+    check_respons "$1"
 fi
 
 ################################################################################
-# Last updated: 2016-01-16 10:22:14 CET
-
+# Last updated: 2016-02-26 18:19:05 CET
