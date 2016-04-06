@@ -1,8 +1,8 @@
 #!/usr/bin/env perl
 #
-# unbound-blacklist: Create an include file for unbound with domains to block.
+# unbound-blacklist: Create an include file for unbound with domains to block
 #
-# Copyright (c) 2014-2015, Joel A. Nilsson <joel@alikzus.se>
+# Copyright (c) 2014-2016, Joel A. Nilsson <joel@alikzus.se>
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -17,129 +17,140 @@
 # PERFORMANCE OF THIS SOFTWARE.
 #
 
-use 5.18.2;
+use 5.20.2;
+
+use strict;
 use warnings;
-use autodie;
+
+use Carp;
+use English '-no_match_vars';
+use Getopt::Long::Descriptive;
+use Readonly;
 
 ################################################################################
 # PARAMETERS
 ################################################################################
 
-my $DOMAIN_LIST = '/var/adsuck/files/hosts.small';
-my $ZONE_FILE   = '/var/unbound/etc/blacklist';
+# The same sources as AdAway for Android, 2016-04-05
+Readonly my @SOURCES => (
+    'http://hosts-file.net/ad_servers.txt',
+    'http://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext',
+    'http://winhelp2002.mvps.org/hosts.txt',
+    'https://adaway.org/hosts.txt',
+);
+
+# TODO Replace with getopts
+my $BLACKLIST = '/var/unbound/db/blacklist';
+#my $BLACKLIST = '/tmp/blacklist.txt';
+
+################################################################################
+# CONSTANT DEFINITIONS
+################################################################################
+
+Readonly my $PROGRAM_NAME => 'unbound-blacklist';
+
+Readonly my $EMPTY_STRING => '';
+
+Readonly my $CARRIAGE_RETURN => qr/\r$/;
+Readonly my $COMMENT         => qr/\s+#.*/;
+Readonly my $IP_ADDRESS      => qr/^\d{1,3}\.0\.0\.\d\s+/;
 
 ################################################################################
 # MAIN
 ################################################################################
 
-# Read the domain list file.
-open FILE, '<', $DOMAIN_LIST or die $!;
-my @list = <FILE>;
-close FILE or die $!;
+my @list;
 
-# Create an array to store the domains in.
-my @domains;
+for my $source (@SOURCES) {
+    open my $fetch_fh,'-|:encoding(ascii)',"/usr/bin/ftp -o - \'$source\'"
+        or carp $OS_ERROR;
 
-Parse_Domain_List();
+    while ( my $line = <$fetch_fh> ) {
+        push @list, $line;
+    }
 
-# Backup the old zone file.
-system("mv", "$ZONE_FILE", "$ZONE_FILE.old");
+    close $fetch_fh or croak $OS_ERROR;
+}
 
-# Write the new zone file.
-open FILE, '>', "$ZONE_FILE" or die $!;
-print FILE Generate_Zone();
-close FILE or die $!;
+my %domains;
 
-## Check the config
-#if ( system("/usr/sbin/unbound-checkconf") )
-#{
-#    system("mv", "$ZONE_FILE", "$ZONE_FILE.new");
-#    system("mv", "$ZONE_FILE.old", "$ZONE_FILE");
-#    exit;
-#}
-#
-## Reload unbound(8).
-#exit if system("/etc/rc.d/unbound", "reload");
+parse_list();
+
+system("/bin/mv", "$BLACKLIST", "$BLACKLIST.bak");
+
+open my $blacklist_fh, '>:encoding(ascii)', "$BLACKLIST" or carp $OS_ERROR;
+print $blacklist_fh generate_content();
+close $blacklist_fh or croak $OS_ERROR;
+
+if ( system("/usr/sbin/unbound-checkconf") ) {
+    system( "/bin/mv", "$BLACKLIST", "$BLACKLIST.broken" );
+    system( "/bin/mv", "$BLACKLIST.bak", "$BLACKLIST" );
+    say STDERR "$PROGRAM_NAME: Invalid unbound configuration";
+}
+else {
+    system( "/etc/rc.d/unbound", "reload" );
+    say STDOUT "$PROGRAM_NAME: Done";
+}
+
+exit;
 
 ################################################################################
 # SUBROUTINES
 ################################################################################
 
-#-------------------------------------------------------------------------------
-# Parse the Domain List file
-#-------------------------------------------------------------------------------
-sub Parse_Domain_List
+sub parse_list
 {
-    my $domain_name;
+    for my $line (@list) {
+        chomp $line;
+        $line =~ s/$CARRIAGE_RETURN/$EMPTY_STRING/xms;
 
-    # Find and store all domain names in the list.
-    for my $line ( @list )
-    {
-        chomp $line; # Chomp line feed
+        my $domain;
 
-        $line =~ s/\r//; # Chomp a possible carriage return
-        
-        # If the line contains the string 127.0.0.1,
-        # cut out the domain name.
-        if ( $line =~ s/^127\.0\.0\.1\s+// )
-        {
-            # Remove any possible comments on the line after the domain name.
-            ( $domain_name = $line ) =~ s/\s+#.*//;
+        # TODO Make more tidy
+        if ( $line =~ s/$IP_ADDRESS/$EMPTY_STRING/xms ) {
+            ( $domain = $line ) =~ s/$COMMENT/$EMPTY_STRING/xms;
+            $domain =~ s/\.$/$EMPTY_STRING/xms; # TODO qr/
+            $domain = lc $domain;
         }
 
-        # Store the domain name if it is non-empty and is not localhost.
-        if ( $domain_name && ( $domain_name ne 'localhost' ) )
-        {
-            push(@domains, $domain_name);
+        if ( $domain && ( $domain ne 'localhost' ) && ( !$domains{$domain} ) ) {
+            $domains{$domain} = 1;
         }
-
-        $domain_name = undef;
     }
 }
 
 #-------------------------------------------------------------------------------
-# Generate the blacklist Zone
-#-------------------------------------------------------------------------------
-sub Generate_Zone
+
+sub generate_content
 {
-    my $timestamp = Get_Timestamp();
+    my $timestamp = get_timestamp();
 
-    my $username = getlogin;
+    my $content = qq{# Generated with $PROGRAM_NAME, $timestamp\n};
 
-    my $zone_output = qq^# Edited by $username, $timestamp.
-^;
-
-    my $domain_name;
-
-    while ( @domains )
-    {
-        $domain_name = shift(@domains);
-
-        $zone_output .= qq^local-zone: "$domain_name" static^;
+    for my $domain ( keys %domains ) {
+        $content .= qq{local-zone: "$domain" static\n};
     }
 
-    return $zone_output;
+    return $content;
 }
 
 #-------------------------------------------------------------------------------
-# Get a Timestamp
-#-------------------------------------------------------------------------------
-sub Get_Timestamp
+
+sub get_timestamp
 {
     my ( $sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst ) = localtime();
 
     $mon  += 1;
     $year += 1900;
 
-    #$year = sprintf("%02u", $year % 100);
     $mon  = sprintf("%02u", $mon);
     $mday = sprintf("%02u", $mday);
     $hour = sprintf("%02u", $hour);
     $min  = sprintf("%02u", $min);
     $sec  = sprintf("%02u", $sec );
 
-    return "${year}-${mon}-${mday} ${hour}:${min}:${sec}";
+    return "${year}-${mon}-${mday}T${hour}:${min}:${sec}";
 }
 
 ################################################################################
-# Last updated: 2015-08-24 20:58:19 CEST
+# Last updated: 2016-04-06 18:10:31 CEST
