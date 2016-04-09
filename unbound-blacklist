@@ -2,7 +2,7 @@
 #
 # unbound-blacklist: Create an include file for unbound with domains to block
 #
-# Usage: unbound-blacklist [-d] [-f file]
+# Usage: unbound-blacklist [-dh] [-f file]
 #
 # Copyright (c) 2014-2016, Joel A. Nilsson <joel@alikzus.se>
 #
@@ -42,15 +42,11 @@ Readonly my @SOURCES => (
     'https://adaway.org/hosts.txt',
 );
 
-# TODO Replace with getopts
-my $BLACKLIST = '/var/unbound/db/blacklist';
-#my $BLACKLIST = '/tmp/blacklist.txt';
-
 ################################################################################
 # CONSTANT DEFINITIONS
 ################################################################################
 
-Readonly my $PROGRAM_NAME => 'unbound-blacklist';
+Readonly my $PROGRAM_NAME => 'unbound-blacklist';   # Override
 
 Readonly my $EMPTY_STRING => '';
 
@@ -60,12 +56,53 @@ Readonly my $IP_ADDRESS  => qr/^\d{1,3}\.0\.0\.\d\s+/;
 Readonly my $LINE_ENDING => qr/\r?\n$/;
 
 ################################################################################
+# OPTIONS AND ARGUMENTS
+################################################################################
+
+my ( $options, $usage ) = describe_options(
+  "$PROGRAM_NAME %o <some-arg>",
+  [ 'file|f=s',  "the output filename" ],
+  [ 'debug|d',   "debug mode" ],
+  [ 'verbose|v', "verbose mode" ],
+  [ 'help|h',    "print the usage message and exit" ],
+);
+
+if ( $options->help ) {
+    print $usage->text;
+    exit;
+}
+
+my $blacklist_file;
+if ( $options->file ) {
+    $blacklist_file = $options->file;
+}
+elsif ( $options->debug ) {
+    $blacklist_file = '/tmp/unbound_blacklist';
+}
+else {
+    $blacklist_file = '/var/unbound/db/blacklist';
+}
+
+my $fetch_options = '-';
+if ( $options->verbose ) {
+    $fetch_options .= 'o';
+}
+else {
+    $fetch_options .= 'Vo';
+}
+
+################################################################################
 # MAIN
 ################################################################################
 
+if ( -f "$blacklist_file.broken" ) {
+    system( "/bin/rm", "$blacklist_file.broken" );
+}
+
 my %domains;
 for my $source (@SOURCES) {
-    open my $fetch_fh,'-|:encoding(ascii)',"/usr/bin/ftp -Vo - \'$source\'"
+    open my $fetch_fh, '-|:encoding(ascii)',
+        "/usr/bin/ftp $fetch_options - \'$source\'"
         or carp $OS_ERROR;
     while ( my $line = <$fetch_fh> ) {
         my $domain;
@@ -89,25 +126,32 @@ for my $domain ( keys %domains ) {
     $content .= qq{local-zone: "$domain" static\n};
 }
 
-system("/bin/mv", "$BLACKLIST", "$BLACKLIST.bak");
-open my $blacklist_fh, '>:encoding(ascii)', "$BLACKLIST" or carp $OS_ERROR;
+if ( !$options->debug ) {
+    system("/bin/mv", "$blacklist_file", "$blacklist_file.backup");
+}
+
+open my $blacklist_fh, '>:encoding(ascii)', "$blacklist_file" or carp $OS_ERROR;
 print $blacklist_fh $content;
 close $blacklist_fh or croak $OS_ERROR;
 
-my $exit_code;
-if ( system("/usr/sbin/unbound-checkconf") ) {
-    system( "/bin/mv", "$BLACKLIST", "$BLACKLIST.broken" );
-    system( "/bin/mv", "$BLACKLIST.bak", "$BLACKLIST" );
-    say STDERR "$PROGRAM_NAME: Invalid unbound configuration";
-    $exit_code = 1;
-}
-else {
-    system( "/etc/rc.d/unbound", "reload" );
-    say STDOUT "$PROGRAM_NAME: Done";
-    $exit_code = 0;
+# Premature exit if debug mode
+if ( $options->debug ) {
+    say STDOUT "$PROGRAM_NAME: DEBUG Done";
+    exit;
 }
 
-exit $exit_code;
+# Test the configuration and exit on error
+if ( system("/usr/sbin/unbound-checkconf") ) {
+    system( "/bin/mv", "$blacklist_file", "$blacklist_file.broken" );
+    system( "/bin/mv", "$blacklist_file.backup", "$blacklist_file" );
+    say STDERR "$PROGRAM_NAME: Invalid unbound configuration";
+    exit 1;
+}
+
+system( "/bin/rm", "$blacklist_file.backup" );
+system( "/etc/rc.d/unbound", "reload" );
+say STDOUT "$PROGRAM_NAME: Done";
+exit;
 
 ################################################################################
-# Last updated: 2016-04-08 19:02:35 CEST
+# Last updated: 2016-04-09 10:47:48 CEST
