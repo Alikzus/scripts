@@ -95,6 +95,7 @@ else {
 # MAIN
 ################################################################################
 
+# Housekeeping
 if ( -f "$blacklist_file.broken" ) {
     system( "/bin/rm", "$blacklist_file.broken" );
 }
@@ -126,7 +127,8 @@ for my $domain ( keys %domains ) {
     $content .= qq{local-zone: "$domain" static\n};
 }
 
-if ( !$options->debug ) {
+# Fallback
+if ( !$options->debug && ( -f $blacklist_file ) ) {
     system("/bin/mv", "$blacklist_file", "$blacklist_file.backup");
 }
 
@@ -148,10 +150,14 @@ if ( system("/usr/sbin/unbound-checkconf") ) {
     exit 1;
 }
 
-system( "/bin/rm", "$blacklist_file.backup" );
+# Housekeeping
+if ( -f "$blacklist_file.backup" ) {
+    system( "/bin/rm", "$blacklist_file.backup" );
+}
+
 system( "/etc/rc.d/unbound", "reload" );
 say STDOUT "$PROGRAM_NAME: Done";
 exit;
 
 ################################################################################
-# Last updated: 2016-04-09 10:47:48 CEST
+# Last updated: 2016-04-09 11:18:40 CEST
