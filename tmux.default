@@ -77,4 +77,4 @@ create_session() {
 tmux attach-session -t "${NAME}"
 
 #-------------------------------------------------------------------------------
-# Last updated: 2016-03-05 15:19:47 CET
+# Last Changed: 2016-04-17 14:43:40 CEST

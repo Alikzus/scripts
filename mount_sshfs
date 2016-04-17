@@ -78,7 +78,8 @@ message "USER=${USER}" "VOLUME=${VOLUME}"
 
 if [ ! -d "${LOCAL_PATH}" ]; then
     message "Creating directory ${LOCAL_PATH}"
-    /bin/mkdir "${LOCAL_PATH}" || error "Could NOT create the directory ${LOCAL_PATH}"
+    /bin/mkdir "${LOCAL_PATH}" \
+        || error "Could NOT create the directory ${LOCAL_PATH}"
 else
     message "The directory ${LOCAL_PATH} already exists"
 fi
@@ -99,3 +100,6 @@ fi
 
 message "Done"
 exit
+
+################################################################################
+# Last Changed: 2016-04-17 14:40:17 CEST
