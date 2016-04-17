@@ -4,9 +4,9 @@ scripts
 This repository contains small stand-alone scripts to automate the boring stuff,
 perform various tasks et cetera.
 
-Nota bene, that the scripts are designed for OpenBSD (-stable and -current) if
-nothing else is stated. Please feel free to send me patches if you want to
-extend the support to other operating systems.
+Nota bene, that the scripts are designed for OpenBSD (http://www.openbsd.org),
+-stable and -current, if nothing else is stated. Please feel free to send me
+patches if you want to extend the support to other operating systems.
 
 ### akvavit
 
