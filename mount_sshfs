@@ -1,0 +1,101 @@
+#!/bin/sh
+#
+# mount_sshfs
+#
+# Usage: mount_sshfs user volume
+#
+# Copyright (c) 2016, Joel A. Nilsson <joel@alikzus.se>
+#
+# Permission to use, copy, modify, and/or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+# LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
+# OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+# PERFORMANCE OF THIS SOFTWARE.
+#
+
+################################################################################
+# PRAGMAS
+################################################################################
+
+set -u
+
+################################################################################
+# ARGUMENTS
+################################################################################
+
+USER="$1"
+VOLUME="$2"
+
+################################################################################
+# PARAMETERS
+################################################################################
+
+HOST="sftp"
+
+LOCAL_PATH="/Volumes/${VOLUME}"
+REMOTE_PATH="/home/${VOLUME}"
+
+################################################################################
+# CONSTANTS
+################################################################################
+
+PROGRAM_NAME="mount_sshfs"
+
+################################################################################
+# FUNCTIONS
+################################################################################
+
+message() {
+    /usr/bin/logger -t "${PROGRAM_NAME}" "${*}"
+}
+
+error() {
+    /usr/bin/logger -t "${PROGRAM_NAME}" "${*}"
+    abort
+}
+
+abort() {
+    message "Aborted"
+    if [ -d "${LOCAL_PATH}" ]; then
+        /bin/rmdir "${LOCAL_PATH}"
+    fi
+    exit 1
+}
+
+################################################################################
+# MAIN
+################################################################################
+
+trap "abort" 1 2 3 13 15
+
+message "USER=${USER}" "VOLUME=${VOLUME}"
+
+if [ ! -d "${LOCAL_PATH}" ]; then
+    message "Creating directory ${LOCAL_PATH}"
+    /bin/mkdir "${LOCAL_PATH}" || error "Could NOT create the directory ${LOCAL_PATH}"
+else
+    message "The directory ${LOCAL_PATH} already exists"
+fi
+
+if ! /sbin/mount | /usr/bin/grep -q "${LOCAL_PATH}"; then
+    message "Mounting remote filesystem"
+    if /sbin/ping -oc 60 "${HOST}"; then
+        /usr/local/bin/sshfs "${USER}@${HOST}:${REMOTE_PATH}" \
+            "${LOCAL_PATH}" \
+            -o "volname=${VOLUME}" 2>&1 \
+            | /usr/bin/logger -t "${PROGRAM_NAME}"
+    else
+        error "No response from the host ${HOST}"
+    fi
+else
+    message "The remote filesystem is already mounted"
+fi
+
+message "Done"
+exit
