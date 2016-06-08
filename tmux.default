@@ -19,62 +19,62 @@ set -eu
 
 NAME=$(/usr/bin/id -un)
 
-tmux has-session -t "${NAME}" || create_session
-
 create_session() {
 
     # Create a new session
-    tmux new-session -s "${NAME}" -n com -d
+    tmux new-session -s test -n com -d
 
     #---------------------------------------------------------------------------
     # Create windows
 
-    tmux new-window "=${NAME} -n ex"
-    tmux new-window "=${NAME} -n sys"
-    tmux new-window "=${NAME} -n dev"
+    tmux new-window =${NAME} -n ex
+    tmux new-window =${NAME} -n sys
+    tmux new-window =${NAME} -n dev
 
     #---------------------------------------------------------------------------
     # Split windows into panes
 
     # Split the first window into four equal sized panes
-    tmux split-window -v -t "=${NAME}:com"
-    tmux split-window -h -t "=${NAME}:com.{left}"
-    tmux split-window -h -t "=${NAME}:com.{right}"
+    #tmux split-window -v -t =${NAME}:com
+    #tmux split-window -h -t =${NAME}:com.{left}
+    #tmux split-window -h -t =${NAME}:com.{right}
 
     # Create a second window and split it in four equal panes as well
-    tmux split-window -v -t "=${NAME}:ex"
-    tmux split-window -h -t "=${NAME}:ex.{left}"
-    tmux split-window -h -t "=${NAME}:ex.{right}"
+    #tmux split-window -v -t =${NAME}:ex
+    #tmux split-window -h -t =${NAME}:ex.{left}
+    #tmux split-window -h -t =${NAME}:ex.{right}
 
     # ... a third window and split it in four equal panes as well
-    tmux split-window -v -t "=${NAME}:sys"
-    tmux split-window -h -t "=${NAME}:sys.{left}"
-    tmux split-window -h -t "=${NAME}:sys.{right}"
+    #tmux split-window -v -t =${NAME}:sys
+    #tmux split-window -h -t =${NAME}:sys.{left}
+    #tmux split-window -h -t =${NAME}:sys.{right}
 
     # ... a fourth window and split it vertically
-    tmux split-window -v -t "=${NAME}:dev"
+    #tmux split-window -v -t =${NAME}:dev
 
     #---------------------------------------------------------------------------
     # Execute commands
 
     # syslog; om is a ksh function; see .kshrc
-    tmux send-keys -t "=${NAME}:com.{top-left}" 'om log server_accept_tls' C-m
+    #tmux send-keys -t =${NAME}:com.{top-left} 'om log server_accept_tls' C-m
 
     # newsbeuter
-    tmux send-keys -t "=${NAME}:com.{bottom-right}" '/usr/local/bin/newsbeuter' C-m
+    #tmux send-keys -t =${NAME}:com.{bottom-right} '/usr/local/bin/newsbeuter' C-m
 
     # irssi
-    tmux send-keys -t "=${NAME}:com.{top-right}" '/usr/local/bin/irssi' C-m
+    #tmux send-keys -t =${NAME}:com.{top-right} '/usr/local/bin/irssi' C-m
 
     # mutt
-    tmux send-keys -t "=${NAME}:com.{bottom-right}" '/usr/local/bin/mutt' C-m
+    #tmux send-keys -t =${NAME}:com.{bottom-right} '/usr/local/bin/mutt' C-m
 
     #---------------------------------------------------------------------------
     # Select the first window at start up
-    tmux select-window -t "=${NAME}:com"
+    #tmux select-window -t =${NAME}:com
 }
 
-tmux attach-session -t "${NAME}"
+tmux has-session -t ${NAME}|| create_session
+
+tmux attach-session -t ${NAME}
 
 #-------------------------------------------------------------------------------
-# Last Changed: 2016-04-17 14:43:40 CEST
+# Last Changed: 2016-06-02 20:29:28 CEST

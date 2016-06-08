@@ -67,12 +67,13 @@ my $csv = Text::CSV_XS->new(
 );
 
 my $buffer;
+my $b_has_title;
 my $b_has_table;
 
 while ( my $line = <> ) {
     $buffer .= do {
         given ($line) {
-            when ( m/<h1>/    ) { title($line)   }
+            when ( m/<h2>/    ) { title($line)   }
             when ( m/<h\d>/   ) { heading($line) }
             when ( m/matrix=/ ) { table($line)   }
             default             { $line          }
@@ -114,23 +115,32 @@ sub beginning {
 
 #-------------------------------------------------------------------------------
 
+# TODO This subroutine needs some work.
 sub title {
     my $line = shift;
 
-    my $headline = $line;
-
-    $headline =~ s/ <h1>   / /xms;
-    $headline =~ s/ <\/h1> / /xms;
-
-    chomp $headline;
-
-    my $title = "<title>$headline</title>\n</head>\n<body>\n";
-
-    if ($navbar) {
-        $title .= qq{<?php include("$navbar"); ?>\n};
+    my $title;
+    if (!$b_has_title) {
+        $b_has_title = 1;
+    
+        my $headline = $line;
+    
+        $headline =~ s/<h2>//xms;
+        $headline =~ s/<\/h2>//xms;
+    
+        chomp $headline;
+    
+        $title = "<title>$headline</title>\n</head>\n<body>\n<header>\n";
+    
+        if ($navbar) {
+            $title .= qq{<?php include("$navbar"); ?>\n};
+        }
+    
+        $title .= qq{</header>\n<h2 id="Top">$headline</h2>\n};
     }
-
-    $title .= qq{<h1 id="Top">$headline</h1>\n};
+    else {
+        $title = heading($line);
+    }
 
     return $title;
 }
@@ -142,17 +152,17 @@ sub heading {
 
     my $headline = $line;
 
-    $headline =~ s/ <h\d>   / /xms;
-    $headline =~ s/ <\/h\d> / /xms;
+    $headline =~ s/<h\d>//xms;
+    $headline =~ s/<\/h\d>//xms;
 
     chomp $headline;
 
     # TODO Replace with hash look-up.
     my $level = do {
         given ($line) {
-            when ( m/<h3>/ ) { '3' }
+            when ( m/<h2>/ ) { '2' }
             when ( m/<h4>/ ) { '4' }
-            default          { '2' }
+            default          { '3' }
         }
     };
 
@@ -170,8 +180,8 @@ sub table {
 
     my $csv_file = $line;
 
-    $csv_file =~ s/<p>matrix= //xms;
-    $csv_file =~ s/<\/p>      //xms;
+    $csv_file =~ s/<p>matrix=//xms;
+    $csv_file =~ s/<\/p>//xms;
 
     chomp $csv_file;
 
@@ -221,4 +231,4 @@ sub end {
 __END__
 
 ################################################################################
-# Last Changed: 2015-10-01 19:42:43 CEST
+# Last Changed: 2016-06-08 21:17:55 CEST
