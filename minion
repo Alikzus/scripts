@@ -2,12 +2,12 @@
 
 # minion -- a quite simple web page generator
 #
-# Usage: cmark file.md | minion -s page.css -n nav.html > file.php
+# Usage: multimarkdown file.mmd | minion -s page.css -n nav.html > file.php
 #
 # Credits to mc at the domain hack.org for his program mdn that this work is
 # derived from.
 #
-# Copyright (c) 2015, Joel A. Nilsson <joel@alikzus.se>
+# Copyright (c) 2015-2016, Joel A. Nilsson <joel@alikzus.se>
 # Copyright (c) 2014, Michael Cardell Widerkrantz <mc@hack.org>
 #
 # Permission to use, copy, modify, and/or distribute this software for any
@@ -73,10 +73,9 @@ my $b_has_table;
 while ( my $line = <> ) {
     $buffer .= do {
         given ($line) {
-            when ( m/<h2>/    ) { title($line)   }
-            when ( m/<h\d>/   ) { heading($line) }
-            when ( m/matrix=/ ) { table($line)   }
-            default             { $line          }
+            when ( m/<h[12]\s*/ ) { title($line)   }
+            when ( m/matrix=/   ) { table($line)   }
+            default               { $line          }
         }
     };
 }
@@ -124,51 +123,25 @@ sub title {
         $b_has_title = 1;
     
         my $headline = $line;
-    
-        $headline =~ s/<h2>//xms;
-        $headline =~ s/<\/h2>//xms;
-    
         chomp $headline;
     
-        $title = "<title>$headline</title>\n</head>\n<body>\n<header>\n";
+        (my $heading = $headline) =~ s/<h[12]\sid\=\"\w+\">//xms;
+        $heading =~ s/<\/h[12]>//xms;
+    
+        $title = qq{<title>$heading</title>\n}
+               . qq{</head>\n<body>\n<div id="top">\n<header>\n};
     
         if ($navbar) {
             $title .= qq{<?php include("$navbar"); ?>\n};
         }
     
-        $title .= qq{</header>\n<h2 id="Top">$headline</h2>\n};
+        $title .= qq{</header>\n</div>\n<main>\n$headline\n};
     }
     else {
-        $title = heading($line);
+        $title = $line;
     }
 
     return $title;
-}
-
-#-------------------------------------------------------------------------------
-
-sub heading {
-    my $line = shift;
-
-    my $headline = $line;
-
-    $headline =~ s/<h\d>//xms;
-    $headline =~ s/<\/h\d>//xms;
-
-    chomp $headline;
-
-    # TODO Replace with hash look-up.
-    my $level = do {
-        given ($line) {
-            when ( m/<h2>/ ) { '2' }
-            when ( m/<h4>/ ) { '4' }
-            default          { '3' }
-        }
-    };
-
-    my $heading = qq{<h$level id="$headline">$headline</h$level>\n};
-
-    return $heading;
 }
 
 #-------------------------------------------------------------------------------
@@ -225,10 +198,10 @@ sub table {
 #-------------------------------------------------------------------------------
 
 sub end {
-    return "</body>\n</html>\n";
+    return "</main>\n</body>\n</html>\n";
 }
 
 __END__
 
 ################################################################################
-# Last Changed: 2016-06-08 21:17:55 CEST
+# Last Changed: 2016-06-20 20:46:07 CEST
