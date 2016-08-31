@@ -30,8 +30,7 @@ set -u
 # CONSTANTS
 ################################################################################
 
-CONTROL="www.google.se"
-NAME="${0##*/}"
+NAME="check-host"
 
 ################################################################################
 # SUBROUTINES
@@ -69,12 +68,21 @@ send_msg() {
 
 no_respons() {
     if [ -f "${cache}" ]; then
-        if [ "$(/usr/bin/find "${cache}" -mmin +60)" ]; then
-            touch "${cache}"
+        count="$(cat "${cache}")"
+        if [ "${count}" -le 12 ]; then
+            time=60
+        elif [ "${count}" -gt 12 ] && [ "${count}" -le 18 ]; then
+            time=120
+        else
+            time=720
+        fi
+        if [ "$(/usr/bin/find "${cache}" -mmin +${time})" ]; then
+            count=$((count + 1))
+            echo "${count}" > "${cache}"
             send_msg "$1 is still NOT responding to pings"
         fi
     else
-        touch "${cache}"
+        echo "1" > "${cache}"
         send_msg "$1 is NOT responding to pings"
     fi
 }
@@ -89,9 +97,9 @@ respons() {
 check_respons() {
     cache="${_TMPDIR}/$1"
 
-    trials=0
+    tries=0
 
-    while [ ${trials} -lt 60 ]; do
+    while [ ${tries} -lt 60 ]; do
         /sbin/ping -c 1 -q "$1" > /dev/null
         if [ $? -eq 0 ]; then
             got_respons=1
@@ -99,15 +107,12 @@ check_respons() {
         else
             got_respons=0
         fi
-        trials=$((trials + 1))
+        tries=$((tries + 1))
         sleep 1
     done
 
     if [ "${got_respons}" -eq 0 ]; then
-        /sbin/ping -c 3 -q "${CONTROL}" > /dev/null
-        if [ $? -eq 0 ]; then
-            no_respons "$1"
-        fi
+        no_respons "$1"
     else
         respons "$1"
     fi
@@ -146,4 +151,4 @@ else
 fi
 
 ################################################################################
-# Last Changed: 2016-04-17 14:43:17 CEST
+# Last Changed: 2016-08-31 17:29:01 CEST
