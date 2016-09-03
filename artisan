@@ -18,8 +18,10 @@
 # OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 # PERFORMANCE OF THIS SOFTWARE.
 #
+# DEPENDENCIES:
+#    * ImageMagick
 
-MAX_THREADS="4" # preferably the number of CPU cores
+MAX_THREADS="4" # preferably the number of real CPU cores
 
 ################################################################################
 
@@ -64,7 +66,7 @@ else
     TOP_DIR="$1"
 fi
 
-formats=$(find "${TOP_DIR}/*" -maxdepth 0 ! -name old -exec basename {} \;)
+formats=$(find "${TOP_DIR}/"* -maxdepth 0 ! -name old -exec basename {} \;)
 targets=$(find "${TOP_DIR}/flac/" -name artwork.tif)
 
 for format in ${formats}; do
@@ -80,7 +82,7 @@ for format in ${formats}; do
         # TODO Add support for the update option
         if [ ! -f "${target_dir}/Folder.jpg" ]; then
             say "${target} -strip ${extra_opts} ${target_dir}/Folder.jpg"
-            /usr/local/bin/convert "${target}" -strip "${extra_opts}" "${target_dir}/Folder.jpg" &
+            /usr/local/bin/convert "${target}" -strip ${extra_opts} "${target_dir}/Folder.jpg" &
         fi
 
         while [ "$(jobs | wc -l)" -ge "${MAX_THREADS}" ]; do
@@ -93,4 +95,4 @@ say "Done"
 exit 0
 
 ################################################################################
-# Last Changed: 2016-09-03 17:18:39 CEST
+# Last Changed: 2016-09-03 17:31:17 CEST
