@@ -4,7 +4,7 @@
 #
 # Usage: artisan [-u] directory
 #
-# Copyright (c) 2015, Joel A. Nilsson <joel@alikzus.se>
+# Copyright (c) 2015-2016, Joel A. Nilsson <joel@alikzus.se>
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -21,19 +21,11 @@
 
 MAX_THREADS="4" # preferably the number of CPU cores
 
-abort() {
-	exit 1
-}
+################################################################################
 
-echo() {
-    if [ "$#" -gt 0 ]; then
-         printf %s "$1"
-         shift
-    fi
-    if [ "$#" -gt 0 ]; then
-         printf ' %s' "$@"
-    fi
-    printf '\n'
+abort() {
+    say "Aborted"
+	exit 1
 }
 
 usage() {
@@ -43,16 +35,18 @@ usage() {
 	echo "Options:"
     echo "  -u    update; do not skip existing files."
 	echo
-	abort
+	exit 1
 }
 
-pr_err() {
-	echo "!!! ${@}"
+error() {
+	echo "!!! ${*}"
 }
 
-pr() {
-	echo "==> ${@}"
+say() {
+	echo "==> ${*}"
 }
+
+################################################################################
 
 trap "abort" 1 2 3 13 15
 
@@ -63,37 +57,40 @@ while getopts 'u' arg; do
 	esac
 done
 
-# TODO There is a better way to do this
+# TODO There must a better way to do this
 if [ "${update}" ]; then
     TOP_DIR="$2"
 else
     TOP_DIR="$1"
 fi
 
-formats=`find ${TOP_DIR}/* -maxdepth 0 ! -name old -exec basename {} \;`
-targets=`find ${TOP_DIR}/flac/ -name artwork.tif`
+formats=$(find "${TOP_DIR}/*" -maxdepth 0 ! -name old -exec basename {} \;)
+targets=$(find "${TOP_DIR}/flac/" -name artwork.tif)
 
 for format in ${formats}; do
-    if [ "${format}" == "aac" ]; then
+    if [ "${format}" = "aac" ]; then
         extra_opts="-sampling-factor 4:2:0 -define jpeg:dct-method=float -resize 55% -quality 25%"
     else
         extra_opts=""
     fi
 
     for target in ${targets}; do
-        target_dir=`dirname ${target} | sed -E "s/\/flac\//\/${format}\//"`
+        target_dir=$(dirname "${target}" | sed -E "s/\/flac\//\/${format}\//")
 
         # TODO Add support for the update option
         if [ ! -f "${target_dir}/Folder.jpg" ]; then
-            pr "${target} -strip ${extra_opts} ${target_dir}/Folder.jpg"
-            /usr/local/bin/convert ${target} -strip ${extra_opts} ${target_dir}/Folder.jpg &
+            say "${target} -strip ${extra_opts} ${target_dir}/Folder.jpg"
+            /usr/local/bin/convert "${target}" -strip "${extra_opts}" "${target_dir}/Folder.jpg" &
         fi
 
-        while [ $(jobs | wc -l) -ge "${MAX_THREADS}" ]; do
+        while [ "$(jobs | wc -l)" -ge "${MAX_THREADS}" ]; do
             sleep 0.1
         done
     done
 done
 
+say "Done"
+exit 0
+
 ################################################################################
-# Last Changed: 2016-04-17 14:43:06 CEST
+# Last Changed: 2016-09-03 17:18:39 CEST
