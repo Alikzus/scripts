@@ -3,7 +3,8 @@
 # check-host -- check if one or several hosts are alive and use pushover to send
 #               a notification upon a negative response
 #
-# Usage: check-host [-f] filename/host
+# Usage: check-host hostname
+#        check-host -f config-file
 #
 # Copyright (c) 2015-2016, Joel A. Nilsson <joel@alikzus.se>
 #
@@ -25,18 +26,30 @@
 ################################################################################
 
 set -u
+trap "abort" HUP INT QUIT TERM
 
 ################################################################################
 # CONSTANTS
 ################################################################################
 
 NAME="check-host"
+_TMPDIR="/tmp/${NAME}"
 
 ################################################################################
 # SUBROUTINES
 ################################################################################
 
+abort() {
+    say "Aborted"
+    exit 1
+}
+
 error() {
+    fault "$1"
+    abort
+}
+
+fault() {
     echo "!!! ${*}"
 }
 
@@ -44,31 +57,80 @@ say() {
     echo "==> ${*}"
 }
 
-abort() {
-    say "Aborted"
-    exit 1
-}
-
 usage() {
     echo
     echo "Usage: ${NAME} [-f] filename/host" >&2
     echo
     echo "Options:"
-    echo "  -f    read host(s) from the specified file"
+    echo "    -f    config file with hosts et cetera"
     echo
     exit 1
 }
 
-#===============================================================================
-
-send_msg() {
-    # Pushover format: title message
-    /usr/local/bin/pushover "${_HOST}" "$1"
+quit() {
+    say "$1"
+    exit 0
 }
 
-no_respons() {
+#===============================================================================
+
+# ping_host $hostname $number-of-tries 
+ping_host() {
+    /sbin/ping -c "$2" -q "$1" > /dev/null
+}
+
+poke_master() {
+    # If a master site is defined, check if it is alive. Skip otherwise.
+    if ! [ -z "${master}" ]; then
+        ping_host "${master}" 3 
+
+        # If the master is alive, let it do the job -- do NOT continue.
+        if [ $? -eq 0 ]; then
+            quit "Nothing to be done"
+        else
+            say "The master is not responding"
+        fi
+    else
+        say "No master was defined"
+    fi
+}
+
+# send_msg $message
+send_msg() {
+    # Pushover format: title message
+    /usr/local/bin/pushover "$(/bin/hostname -s)" "$1" > /dev/null
+}
+
+#===============================================================================
+
+check_response() {
+    cache="${_TMPDIR}/$1"
+
+    tries=0
+
+    while [ ${tries} -lt 60 ]; do
+        ping_host "$1" 1
+        if [ $? -eq 0 ]; then
+            got_response=1
+            break
+        else
+            got_response=0
+        fi
+        tries=$((tries + 1))
+        sleep 1
+    done
+
+    if [ "${got_response}" -eq 0 ]; then
+        no_response "$1"
+    else
+        response "$1"
+    fi
+}
+
+no_response() {
     if [ -f "${cache}" ]; then
         count="$(cat "${cache}")"
+
         if [ "${count}" -le 12 ]; then
             time=60
         elif [ "${count}" -gt 12 ] && [ "${count}" -le 18 ]; then
@@ -76,6 +138,7 @@ no_respons() {
         else
             time=720
         fi
+
         if [ "$(/usr/bin/find "${cache}" -mmin +${time})" ]; then
             count=$((count + 1))
             echo "${count}" > "${cache}"
@@ -87,34 +150,10 @@ no_respons() {
     fi
 }
 
-respons() {
+response() {
     if [ -f "${cache}" ]; then
-        rm "${cache}"
+        /bin/rm "${cache}" | fault "Could NOT clear the cache"
         send_msg "$1 has started to respond to pings again"
-    fi
-}
-
-check_respons() {
-    cache="${_TMPDIR}/$1"
-
-    tries=0
-
-    while [ ${tries} -lt 60 ]; do
-        /sbin/ping -c 1 -q "$1" > /dev/null
-        if [ $? -eq 0 ]; then
-            got_respons=1
-            break
-        else
-            got_respons=0
-        fi
-        tries=$((tries + 1))
-        sleep 1
-    done
-
-    if [ "${got_respons}" -eq 0 ]; then
-        no_respons "$1"
-    else
-        respons "$1"
     fi
 }
 
@@ -122,12 +161,13 @@ check_respons() {
 # MAIN
 ################################################################################
 
-trap "abort" 1 2 3 13 15
-
-_HOST=$(/bin/hostname -s)
-_TMPDIR="/tmp/${NAME}"
+if [ "$(/usr/bin/id -u)" -eq 0 ]; then
+    error "You should NOT run ${NAME} with root privileges"
+fi
 
 file_is_specified=0
+master=""
+hosts=""
 
 while getopts 'f' arg; do
     case ${arg} in
@@ -136,19 +176,37 @@ while getopts 'f' arg; do
     esac
 done
 
-if [ ! -d "${_TMPDIR}" ]; then
-    /bin/mkdir "${_TMPDIR}"
+# Create a temporary cache if it does NOT exist.
+if ! [ -d "${_TMPDIR}" ]; then
+    /bin/mkdir "${_TMPDIR}" | error "Could NOT create the temporary cache"
 fi
 
 if [ "${file_is_specified}" -eq 1 ]; then
-    hosts=$(cat "$2")
-    
-    for host in ${hosts}; do
-        check_respons "${host}"
-    done
+    config_file="$2"
+
+    if [ -f "${config_file}" ]; then
+        # shellcheck source=/dev/null
+        . "${config_file}"
+    else
+        error "The config file ${config_file} is invalid"
+    fi
+
+    poke_master
+
+    if ! [ -z "${hosts}" ]; then
+        # Loop through all defined hosts.
+        for host in ${hosts}; do
+            check_response "${host}"
+        done
+    else
+        error "No hosts are defined"
+    fi
+
 else
-    check_respons "$1"
+    check_response "$1"
 fi
 
+quit "Done"
+
 ################################################################################
-# Last Changed: 2016-08-31 17:29:01 CEST
+# Last Changed: 2016-09-09 15:18:01 CEST
