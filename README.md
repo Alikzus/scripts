@@ -21,11 +21,6 @@ private use, as both FLAC and MP3. I scan the artwork with a high resolution
 and therefore need copies that are smaller for use on my smartphone and with
 mpd(1).
 
-### check-host
-
-Check-host is used to monitor if a host is alive or not (with ping). I use it
-both on- and offsite.
-
 ### minion
 
 Create a static WWW site from Markdown files. I use it for my personal home
