@@ -47,11 +47,6 @@ Daemon).
 
 Tvilling means twin in Swedish and this is yet another wrapper for Duplicity.
 
-### unbound-blacklist
-
-Blacklist (host block) domains with unbound(8). Uses, as default, the same
-sources as AdAway for Android and hence works as a adblocker on the gateway.
-
 attic
 -----
 
