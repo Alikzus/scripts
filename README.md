@@ -21,11 +21,6 @@ private use, as both FLAC and MP3. I scan the artwork with a high resolution
 and therefore need copies that are smaller for use on my smartphone and with
 mpd(1).
 
-### minion
-
-Create a static WWW site from Markdown files. I use it for my personal home
-page: http://www.alikzus.se.
-
 ### mount_img, umount_img
 
 Mount and unmount image files on an OpenBSD system.
